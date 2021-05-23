@@ -17,6 +17,6 @@
     year = "2021",
     address = "Online",
     publisher = "Association for Computational Linguistics",
-    url = "https://www.aclweb.org/anthology/2020.findings-emnlp.0",
+    url = "",
 }
 ```

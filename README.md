@@ -1,4 +1,7 @@
-# nmt-pretraining-objectives
+# Description
+This repository contains the source code and data for the paper: "Exploration of Unsupervised Pretraining Objectives for Machine Translation" in Findings of ACL 2021.
+
+(code and data will be uploaded soon)
 
 
 

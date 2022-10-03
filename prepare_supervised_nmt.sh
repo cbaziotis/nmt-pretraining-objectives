@@ -47,8 +47,8 @@ elif [ "$DATASET" == "deen" ]; then
   OUT_BIN=$DATA_PATH/deen/parallel_bin
 
   TRAIN_RAW=$DATA_PATH/deen/parallel/news-commentary-v13.de-en
-  VALID_RAW=$DATA_PATH/deen/parallel/newstest2018-deen
-  TEST_RAW=$DATA_PATH/deen/parallel/newstest2019-deen
+  VALID_RAW=$DATA_PATH/deen/parallel/newstest2017-deen
+  TEST_RAW=$DATA_PATH/deen/parallel/newstest2018-deen
 
 else
   echo "unknown dataset"

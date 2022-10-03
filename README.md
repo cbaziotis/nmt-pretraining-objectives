@@ -17,11 +17,12 @@ conda activate nmt-pretrain
 ```
 
 2. __Install PyTorch.__
-   The project was developed with pytorch v1.4.0.
+   The project was developed with pytorch v1.6.0.
    For different cuda versions see https://pytorch.org/get-started/previous-versions/#v140.
 
 ```shell
-conda install pytorch==1.4.0 torchvision==0.5.0 cudatoolkit=10.1 -c pytorch
+ pip install torch==1.6.0+cu101 torchvision==0.7.0+cu101 \
+  -f https://download.pytorch.org/whl/torch_stable.html
 ```
 
 3. __Install custom fairseq.__
@@ -31,7 +32,7 @@ conda install pytorch==1.4.0 torchvision==0.5.0 cudatoolkit=10.1 -c pytorch
 
 ```shell
 LIB_PATH=../fairseq_paper_acl21 # preferanbly choose a path outside from the current project
-git clone --single-branch --branch nmt_pretrain_acl21 https://github.com/cbaziotis/fairseq.git $LIB_PATH
+#git clone --single-branch --branch nmt_pretrain_acl21 https://github.com/cbaziotis/fairseq.git $LIB_PATH
 cd $LIB_PATH
 python -m pip install --editable .
 python setup.py build_ext --inplace

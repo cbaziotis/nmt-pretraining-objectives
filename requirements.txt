@@ -1,0 +1,16 @@
+bokeh==2.2.1
+faiss==1.5.3
+faiss_cpu==1.7.0
+joblib==0.14.0
+matplotlib==3.4.2
+numpy==1.21.6
+pandas==1.1.2
+sacrebleu==1.4.14
+scikit-learn
+seaborn
+tqdm==4.43.0
+umap==0.1.1
+yellowbrick==1.1
+sentencepiece
+tensorboard
+tensorboardX

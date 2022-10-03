@@ -275,9 +275,9 @@ for comb in "${flores[@]}"; do
       PRETRAINED_PARAMS="--task translation_from_pretrained_bart --langs ${SRC},${TGT} --prepend-bos"
 
       # XX->EN
-      generate_job "${DATASET}" "${SRC}" "${TGT}" 2 $seed "$PRETRAINED_OPTIM" "$PRETRAINED_PARAMS" "$cp"
+      generate_job "${DATASET}" "${SRC}" "${TGT}" 1 $seed "$PRETRAINED_OPTIM" "$PRETRAINED_PARAMS" "$cp"
       # EN->XX
-      generate_job "${DATASET}" "${TGT}" "${SRC}" 2 $seed "$PRETRAINED_OPTIM" "$PRETRAINED_PARAMS" "$cp"
+      generate_job "${DATASET}" "${TGT}" "${SRC}" 1 $seed "$PRETRAINED_OPTIM" "$PRETRAINED_PARAMS" "$cp"
 
     done
   done
@@ -318,9 +318,9 @@ for seed in 1 2 3; do
     PRETRAINED_PARAMS="--task translation_from_pretrained_bart --langs ${SRC},${TGT} --prepend-bos"
 
     # XX->EN
-    generate_job "deen/parallel_bin" "de" "en" 2 $seed "$PRETRAINED_OPTIM" "$PRETRAINED_PARAMS" "$cp"
+    generate_job "deen/parallel_bin" "de" "en" 1 $seed "$PRETRAINED_OPTIM" "$PRETRAINED_PARAMS" "$cp"
     # EN->XX
-    generate_job "deen/parallel_bin" "en" "de" 2 $seed "$PRETRAINED_OPTIM" "$PRETRAINED_PARAMS" "$cp"
+    generate_job "deen/parallel_bin" "en" "de" 1 $seed "$PRETRAINED_OPTIM" "$PRETRAINED_PARAMS" "$cp"
 
   done
 done

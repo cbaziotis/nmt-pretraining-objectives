@@ -22,17 +22,18 @@ generate_job() {
   PARA_DATA=$(readlink -f $ROOT/data/${1})
   SRC_LANG=${2}
   TRG_LANG=${3}
-  SEED=${4}
+  GPUS=${4}
+  SEED=${5}
+  OPTIM=${6}
+  PRETRAINED_HP=${7}
+  CHECKPOINT=${8}
 
-  TOTAL_UPDATES=50000 # Total number of training steps
-  WARMUP_UPDATES=8000 # Warmup the learning rate over this many updates
-  LS=0.1              # Label smoothing
-  PEAK_LR=5e-4        # Peak learning rate, adjust as needed
-  EPS=1e-06
-  MAX_TOKENS=6000
-  UPDATE_FREQ=2 # Increase the batch size X
+  EXP_NAME="supervised_nmt_${SRC_LANG}${TRG_LANG}"
+  if [ ! -z "$CHECKPOINT" ]; then
+    EXP_NAME+=".transfer_from.$(basename "$(dirname "$CHECKPOINT")")"
+  fi
+  EXP_NAME+="_seed=${SEED}"
 
-  EXP_NAME="supervised_nmt_${SRC_LANG}${TRG_LANG}_seed=${SEED}"
   SAVE_DIR=$ROOT/checkpoints/supervised_nmt/$EXP_NAME
   mkdir -p "$ROOT/checkpoints/supervised_nmt/$EXP_NAME"
   LAUNCH_TRAIN="$SAVE_DIR/train.sh"
@@ -46,6 +47,9 @@ generate_job() {
   echo "--------------------------------------------------------------------------"
   echo
 
+  #--------------------------------
+  # Create train launcher
+  #--------------------------------
   cat <<END >$LAUNCH_TRAIN
 #!/bin/bash
 #SBATCH -A $ACCOUNT
@@ -54,7 +58,7 @@ generate_job() {
 #SBATCH --error=$SAVE_DIR/train.%j.err
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
-#SBATCH --gres=gpu:2
+#SBATCH --gres=gpu:$GPUS
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=1
 #SBATCH --time=$TIME
@@ -65,20 +69,31 @@ generate_job() {
 source $HOME/.bashrc
 conda activate $CONDA_ENV
 
+RESTORE=""
+
+END
+
+  if [ ! -z "$CHECKPOINT" ]; then
+
+    cat <<END >>$LAUNCH_TRAIN
+
+if [ ! -f "$SAVE_DIR/checkpoint_best.pt" ]; then
+  RESTORE="--restore-file $CHECKPOINT --reset-optimizer --reset-meters --reset-dataloader --reset-lr-scheduler"
+fi
+
+END
+
+  fi
+
+  cat <<END >>$LAUNCH_TRAIN
 fairseq-train $PARA_DATA \\
   --user-dir $ROOT/user \\
   --source-lang $SRC_LANG --target-lang $TRG_LANG \\
   --arch marss_analysis \\
   --dropout 0.3 --attention-dropout 0.1 \\
-  --criterion label_smoothed_cross_entropy --label-smoothing $LS \\
-  --optimizer adam --adam-betas '(0.9, 0.999)' --adam-eps $EPS \\
+  --criterion label_smoothed_cross_entropy \\
+  --optimizer adam --adam-betas '(0.9, 0.999)' --adam-eps 1e-06 \\
   --clip-norm 0.0 \\
-  --lr $PEAK_LR \\
-  --lr-scheduler inverse_sqrt \\
-  --warmup-updates $WARMUP_UPDATES \\
-  --max-update $TOTAL_UPDATES \\
-  --max-tokens $MAX_TOKENS \\
-  --update-freq $UPDATE_FREQ \\
   --ddp-backend no_c10d \\
   --max-source-positions 256 \\
   --max-target-positions 256 \\
@@ -98,7 +113,9 @@ fairseq-train $PARA_DATA \\
   --eval-bleu-print-samples \\
   --best-checkpoint-metric bleu \\
   --maximize-best-checkpoint-metric \\
-  --seed $SEED
+  --seed $SEED \\
+  $OPTIM $PRETRAINED_HP \\
+  \$RESTORE
 
 sbatch $LAUNCH_EVAL
 
@@ -106,8 +123,13 @@ scancel \${SLURM_ARRAY_JOB_ID}
 
 END
 
+  #--------------------------------
+  # Create evaluation launcher
+  #--------------------------------
+
   if [ "${SRC_LANG}" == "de" ] || [ "${TRG_LANG}" == "de" ]; then
-    TESTSETS="$ROOT/data/deen/parallel/newstest2018-${SRC_LANG}${TRG_LANG}"
+    TESTSETS="$ROOT/data/deen/parallel/newstest2017-${SRC_LANG}${TRG_LANG}"
+    TESTSETS+=" $ROOT/data/deen/parallel/newstest2018-${SRC_LANG}${TRG_LANG}"
     TESTSETS+=" $ROOT/data/deen/parallel/newstest2019-${SRC_LANG}${TRG_LANG}"
   elif [ "${SRC_LANG}" == "ne" ] || [ "${TRG_LANG}" == "ne" ]; then
     TESTSETS="$ROOT/data/flores/wikipedia_en_ne_si_test_sets/wikipedia.dev.ne-en"
@@ -156,6 +178,7 @@ for testset in $TESTSETS; do
     --user-dir $ROOT/user \\
     --source-lang $SRC_LANG --target-lang $TRG_LANG \\
     --path $SAVE_DIR/checkpoint_best.pt \\
+    $PRETRAINED_HP \\
     --results-path $SAVE_DIR \\
     --beam 5 \\
     --remove-bpe 'sentencepiece' \\
@@ -176,13 +199,24 @@ END
   sbatch $LAUNCH_TRAIN
 }
 
+# ---------------------------------------------------------------------
+# Random Initialization Experiments
+# ---------------------------------------------------------------------
+RANDOM_OPTIM="--lr 5e-4"
+RANDOM_OPTIM+=" --lr-scheduler inverse_sqrt"
+RANDOM_OPTIM+=" --warmup-updates 8000"
+RANDOM_OPTIM+=" --max-update 50000"
+RANDOM_OPTIM+=" --max-tokens 6000"
+RANDOM_OPTIM+=" --update-freq 2"
+RANDOM_OPTIM+=" --label-smoothing 0.1"
+
 declare -a languages
 languages+=('deen/parallel_bin;de;en')
 languages+=('flores/parallel_neen_bin;ne;en')
 languages+=('flores/parallel_sien_spm;si;en')
 
-for page in "${languages[@]}"; do
-  IFS=";" read -r -a arr <<<"${page}"
+for comb in "${languages[@]}"; do
+  IFS=";" read -r -a arr <<<"${comb}"
   DATASET="${arr[0]}"
   SRC="${arr[1]}"
   TGT="${arr[2]}"
@@ -192,9 +226,101 @@ for page in "${languages[@]}"; do
     # generate_job PARA_DATA, SRC_LANG, TRG_LANG
 
     # XX->EN
-    generate_job "${DATASET}" "${SRC}" "${TGT}" $seed
+    generate_job "${DATASET}" "${SRC}" "${TGT}" 2 $seed "$RANDOM_OPTIM" "" ""
     # EN->XX
-    generate_job "${DATASET}" "${TGT}" "${SRC}" $seed
+    generate_job "${DATASET}" "${TGT}" "${SRC}" 2 $seed "$RANDOM_OPTIM" "" ""
   done
 
+done
+
+# ---------------------------------------------------------------------
+# Finetuning Experiments
+# ---------------------------------------------------------------------
+
+PRETRAINED_OPTIM="--lr 3e-05"
+PRETRAINED_OPTIM+=" --lr-scheduler fixed"
+PRETRAINED_OPTIM+=" --warmup-updates 4000"
+PRETRAINED_OPTIM+=" --max-update 80000"
+PRETRAINED_OPTIM+=" --max-tokens 6000"
+PRETRAINED_OPTIM+=" --update-freq 2"
+PRETRAINED_OPTIM+=" --label-smoothing 0.1"
+
+declare -a flores
+flores+=('flores/parallel_neen_bin;ne;en')
+flores+=('flores/parallel_sien_spm;si;en')
+
+for comb in "${flores[@]}"; do
+  IFS=";" read -r -a arr <<<"${comb}"
+  DATASET="${arr[0]}"
+  SRC="${arr[1]}"
+  TGT="${arr[2]}"
+
+  # IMPORTANT: update the model checkpoints with your own
+  declare -a flores_models=()
+  flores_models+=("$ROOT/checkpoints/pretraining/mbart.flores_${SRC}${TGT}/checkpoint_best.pt")
+  flores_models+=("$ROOT/checkpoints/pretraining/marss.flores_${SRC}${TGT}_mask=35/checkpoint_best.pt")
+  flores_models+=("$ROOT/checkpoints/pretraining/marss.flores_${SRC}${TGT}_replace=35/checkpoint_best.pt")
+  flores_models+=("$ROOT/checkpoints/pretraining/marss.flores_${SRC}${TGT}_replace=35_ertd=6/checkpoint_best.pt")
+  flores_models+=("$ROOT/checkpoints/pretraining/marss.flores_${SRC}${TGT}_shuffle=5/checkpoint_best.pt")
+  flores_models+=("$ROOT/checkpoints/pretraining/marss.flores_${SRC}${TGT}_tied_replace=35/checkpoint_best.pt")
+  flores_models+=("$ROOT/checkpoints/pretraining/marss.flores_${SRC}${TGT}_tied_replace=35_ertd=6/checkpoint_best.pt")
+  flores_models+=("$ROOT/checkpoints/pretraining/marss.flores_${SRC}${TGT}_tied_replace=35_maskdecoder/checkpoint_best.pt")
+  flores_models+=("$ROOT/checkpoints/pretraining/marss.flores_${SRC}${TGT}_tied_replace=35_multitask/checkpoint_best.pt")
+  flores_models+=("$ROOT/checkpoints/pretraining/marss.flores_${SRC}${TGT}_tied_replace=35_replacedecoder/checkpoint_best.pt")
+  flores_models+=("$ROOT/checkpoints/pretraining/marss.flores_${SRC}${TGT}_tied_replace=35_shuffle=3/checkpoint_best.pt")
+
+  for seed in 1 2 3; do
+    for cp in "${flores_models[@]}"; do
+
+      PRETRAINED_PARAMS="--task translation_from_pretrained_bart --langs ${SRC},${TGT} --prepend-bos"
+
+      # XX->EN
+      generate_job "${DATASET}" "${SRC}" "${TGT}" 2 $seed "$PRETRAINED_OPTIM" "$PRETRAINED_PARAMS" "$cp"
+      # EN->XX
+      generate_job "${DATASET}" "${TGT}" "${SRC}" 2 $seed "$PRETRAINED_OPTIM" "$PRETRAINED_PARAMS" "$cp"
+
+    done
+  done
+
+done
+
+# IMPORTANT: update the model checkpoints with your own
+declare -a deen_models=()
+deen_models+=("$ROOT/checkpoints/pretraining/mbart.deen.analysis/checkpoint_best.pt")
+deen_models+=("$ROOT/checkpoints/pretraining/marss.deen.analysis_mask=15/checkpoint_best.pt")
+deen_models+=("$ROOT/checkpoints/pretraining/marss.deen.analysis_mask=35/checkpoint_best.pt")
+deen_models+=("$ROOT/checkpoints/pretraining/marss.deen.analysis_mask=50/checkpoint_best.pt")
+deen_models+=("$ROOT/checkpoints/pretraining/marss.deen.analysis_shuffle=3/checkpoint_best.pt")
+deen_models+=("$ROOT/checkpoints/pretraining/marss.deen.analysis_shuffle=5/checkpoint_best.pt")
+deen_models+=("$ROOT/checkpoints/pretraining/marss.deen.analysis_replace=15/checkpoint_best.pt")
+deen_models+=("$ROOT/checkpoints/pretraining/marss.deen.analysis_replace=35/checkpoint_best.pt")
+deen_models+=("$ROOT/checkpoints/pretraining/marss.deen.analysis_replace=50/checkpoint_best.pt")
+deen_models+=("$ROOT/checkpoints/pretraining/marss.deen.analysis_tied_replace=35/checkpoint_best.pt")
+deen_models+=("$ROOT/checkpoints/pretraining/marss.deen.analysis_replace=35_ertd=4/checkpoint_best.pt")
+deen_models+=("$ROOT/checkpoints/pretraining/marss.deen.analysis_replace=35_ertd=6/checkpoint_best.pt")
+deen_models+=("$ROOT/checkpoints/pretraining/marss.deen.analysis_ratio=0.5_replace=35/checkpoint_best.pt")
+deen_models+=("$ROOT/checkpoints/pretraining/marss.deen.analysis_ratio=1.0_replace=35/checkpoint_best.pt")
+deen_models+=("$ROOT/checkpoints/pretraining/marss.deen.analysis_tied_replace=35_ertd=4/checkpoint_best.pt")
+deen_models+=("$ROOT/checkpoints/pretraining/marss.deen.analysis_tied_replace=35_ertd=6/checkpoint_best.pt")
+deen_models+=("$ROOT/checkpoints/pretraining/marss.deen.analysis_tied_topp=0.9_replace=35/checkpoint_best.pt")
+deen_models+=("$ROOT/checkpoints/pretraining/marss.deen.analysis_tied_replace=35_multitask/checkpoint_best.pt")
+deen_models+=("$ROOT/checkpoints/pretraining/marss.deen.analysis_tied_replace=35_shuffle=3/checkpoint_best.pt")
+deen_models+=("$ROOT/checkpoints/pretraining/marss.deen.analysis_replace=35_shuffle=3_ertd=4/checkpoint_best.pt")
+deen_models+=("$ROOT/checkpoints/pretraining/marss.deen.analysis_replace=35_shuffle=3_ertd=6/checkpoint_best.pt")
+deen_models+=("$ROOT/checkpoints/pretraining/marss.deen.analysis_tied_replace=35_maskdecoder/checkpoint_best.pt")
+deen_models+=("$ROOT/checkpoints/pretraining/marss.deen.analysis_tied_replace=35_replacedecoder/checkpoint_best.pt")
+deen_models+=("$ROOT/checkpoints/pretraining/marss.deen.analysis_tied_replace=35_shuffle=3_ertd=4/checkpoint_best.pt")
+deen_models+=("$ROOT/checkpoints/pretraining/marss.deen.analysis_tied_replace=35_shuffle=3_ertd=6/checkpoint_best.pt")
+
+for seed in 1 2 3; do
+  for cp in "${deen_models[@]}"; do
+
+    PRETRAINED_PARAMS="--task translation_from_pretrained_bart --langs ${SRC},${TGT} --prepend-bos"
+
+    # XX->EN
+    generate_job "deen/parallel_bin" "de" "en" 2 $seed "$PRETRAINED_OPTIM" "$PRETRAINED_PARAMS" "$cp"
+    # EN->XX
+    generate_job "deen/parallel_bin" "en" "de" 2 $seed "$PRETRAINED_OPTIM" "$PRETRAINED_PARAMS" "$cp"
+
+  done
 done

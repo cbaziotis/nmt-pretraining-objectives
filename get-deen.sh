@@ -61,12 +61,12 @@ rm -rf $PARA_PATH/training-parallel-nc-v13
 rm $PARA_PATH/training-parallel-nc-v13.tgz
 
 echo "Downloading newstests..."
-for year in 18 19; do
+for year in 17 18 19; do
   wget -c http://data.statmt.org/wmt${year}/translation-task/test.tgz -O $PARA_PATH/wmt-test-${year}.tgz
   mkdir -p $PARA_PATH/wmt-test-${year}
   tar -xzf $PARA_PATH/wmt-test-${year}.tgz --directory $PARA_PATH/wmt-test-${year}
   mv $PARA_PATH/wmt-test-${year}/*/*deen* $PARA_PATH/
-  mv $PARA_PATH/wmt-test-${year}/*/*deen* $PARA_PATH/
+  mv $PARA_PATH/wmt-test-${year}/*/*ende* $PARA_PATH/
   rm $PARA_PATH/wmt-test-${year}.tgz
   rm -rf $PARA_PATH/wmt-test-${year}
 

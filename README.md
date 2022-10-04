@@ -103,6 +103,10 @@ bash prepare_unsupervised_nmt.sh neen
 bash prepare_unsupervised_nmt.sh sien
 ```
 
+### Pretrained Models
+
+You can view/download the pretrained models or their analysis data from https://data.statmt.org/cbaziotis/projects/acl2021-nmt-pretraining/checkpoints/.
+
 # Paper Citation
 
 ```

@@ -103,14 +103,9 @@ bash prepare_unsupervised_nmt.sh neen
 bash prepare_unsupervised_nmt.sh sien
 ```
 
-### Pretrained Models
 
-You can view/download the pretrained models or their analysis data
-from https://data.statmt.org/cbaziotis/projects/acl2021-nmt-pretraining/checkpoints/.
+# 3. Launching Experiments
 
-# Training
-
-## Launching Experiments
 
 The `experiments/` directory contains scripts that launch experiments, such as pretraining or supervised NMT.
 Each experiment launcher generates the scripts for training/evaluating each particular model.  
@@ -122,7 +117,7 @@ experiments/
 └── analysis/                   # Contains launchers for experiments/probes for analyzing pretrained models
 ```
 
-##### Example
+##### Example: How to train the pretrained models
 This is the process for training the pretraining models.
 You can follow the same process for the running other experiments, such (un)supervised NMT.
 First, execute the experiment launcher:
@@ -174,6 +169,13 @@ tensorboard --logdir runs/ --port 8002
 ``` 
 
 and open `http://localhost:8002/` in your browser.
+
+
+# Pretrained Models
+
+You can download the pretrained models and inspect their analysis data
+in https://data.statmt.org/cbaziotis/projects/acl2021-nmt-pretraining/checkpoints/.
+
 
 # Paper Citation
 
